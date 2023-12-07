@@ -15,3 +15,20 @@ Advantages:
 - Learning and Improvement: With reinforcement learning, the AI can continuously learn from user feedback, enhancing the quality of recommendations.
 
 - Convenience and Accessibility: Users can access and receive grocery recommendations at their convenience, potentially through mobile apps or web interfaces.
+
+---
+dataset format:
+{
+    "productName": string,
+    "price": float,
+    "quantity (unit/ grams/ liters)": float,
+    "producer/brand": string,
+    "nutritionScore": float,
+    "protein": float, ?
+    "calories": float, ?
+    "preferenceRate": int,
+    "countryOrigin": string,
+    "sellerLocationName": string, e.g. (lidl, continente, pingo doce)" if from same seller better to avoid moving to different grocery store
+    "foodType": string, (vegan, vegetarian, etc ...)
+    (...) 
+}
