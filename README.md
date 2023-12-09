@@ -18,17 +18,14 @@ Advantages:
 
 ---
 dataset format:
-{
-    "productName": string,
-    "price": float,
-    "quantity (unit/ grams/ liters)": float,
-    "producer/brand": string,
-    "nutritionScore": float,
-    "protein": float, ?
-    "calories": float, ?
-    "preferenceRate": int,
-    "countryOrigin": string,
-    "sellerLocationName": string, e.g. (lidl, continente, pingo doce)" if from same seller better to avoid moving to different grocery store
-    "foodType": string, (vegan, vegetarian, etc ...)
-    (...) 
-}
+{}
+
+--
+webscrapping:
+** dataThief ** is where webscrapping functionality is located. At the moment is only getting data from continente/mercearia with scrapy to get all generic existing products and an independent script located still in the spiders folder to get more detailed information about download products. 
+
+Idea is to scale this to get also other products as e.g. "Peixaria e Talho", "Lacticinios e Ovos", "Frutas e Legumes", etc ...
+
+- continente
+    - best data provider
+- pingo doce ?

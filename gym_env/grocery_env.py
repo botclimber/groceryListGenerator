@@ -6,10 +6,10 @@ import numpy as np
 # Load products from file and transform into an useful/required dataset 
 class ProductsLT:
 '''
-folder and file are fixed, so we create consistency
+folder and file are fixed, so user just need to change file in one place
 '''
-	FOLDER = ""
-	FILENAME = ""
+	FOLDER = "../data/"
+	FILENAME = "data.json"
 
 	def __init__(self):
 		# open file
@@ -54,7 +54,7 @@ class GroceryEnvironment(gym.Env):
 		# product info format	
 		self.product_info = self._define_product_info()
 		
-		self.observation_keys = self.define_obs_state().keys()
+		self.observation_keys = self.define_obs_state().keys() # user state
 		
 		# Define the observation space
 		self.observation_space = Dict(self.define_user_state())
@@ -81,8 +81,8 @@ class GroceryEnvironment(gym.Env):
 
 	def reset(self):
 		self.userHappiness = USER_START_HAPPINESS
-		self.userHealth = USER_START_HEALTH
 		self.userCurrentBudget = self.userBudgetLimit 
+		self.userHealth = USER_START_HEALTH
 
 		# Return the initial observation
 		return self.get_observation() 
