@@ -6,6 +6,8 @@ import json
 import numpy as np
 import random
 
+import lib
+
 FOLDER = "../../data/"
 FILE = "continente_dataset_detailed_2023129.json"
 
@@ -31,14 +33,23 @@ class GroceryEnvironment(gym.Env):
 	def __init__(self, budget_limit, user_preferences, age, weight, height, gender, physicalAct):
 		super(GroceryEnvironment, self).__init__()
 	
+		# user info
 		self.userBudgetLimit = budget_limit
-		
 		self.age = age
 		self.weight = weight
 		self.gender = gender
 		self.height = height
 		self.physicalAct = physicalAct
+
+		# nutri meals info
+		self.calories = 0 # kcal (Quilocaloria PT)
+		self.lipids = 0 # g (grams)
+		self.carbos = 0 # g (grams)
+		self.fiber = 0 # g (grams)
+		self.protein = 0 # g (grams)
+		self.salt = 0 # g (grams)
 	
+		# real time data
 		self.userCurrentBudget = budget_limit
 		self.userHappiness = USER_START_HAPPINESS
 		self.userHealth = USER_START_HEALTH
@@ -113,6 +124,17 @@ class GroceryEnvironment(gym.Env):
 		return self.get_observation()
 
 	def step(self, action):
+		'''
+		enforce Agent to not chose always the same action
+		delay reward to be sent only when step is even which represents 2 meals 1 day
+		'''
+		sel_product = self.products[action]
+
+		nrc = NRC(self.age, self.gender, self.weight, self.height, self.physicalAct)
+
+		bmr = nrc.calcBMR()
+		tdee = nrc.calcTDEE()
+
 		pass
 
 	def render(self):
