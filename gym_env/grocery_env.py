@@ -153,28 +153,27 @@ class GroceryEnvironment(gym.Env):
 		self.userCurrentBudget += cost
 
 	def compute_userHappiness(self, name, brand):
+		happinessConstant = 100 / USER_TOTAL_MEALS
+
 		for preference in self.user_preferences:
-            prod_to_be_found = preference["product"].lower()
-            brands_to_be_found = preference["brand"]
+        	prod_to_be_found = preference["product"].lower()
+        	brands_to_be_found = preference["brand"]
 
             if isinstance(brands_to_be_found, str):
-                    brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
+            	brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
     
             if prod_to_be_found in name.lower():
-                    print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
-                    # 2/3 medium happy
+                print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
 
-                    if any(brand.lower() == b.lower() for b in brands_to_be_found):
-                            print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
-                            # 3/3 super happy
+                if any(brand.lower() == b.lower() for b in brands_to_be_found):
+                	print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
+                	return happinessConstant
 
-                    else:
-                            print(f"Brand '{brand}' not found in preferences for product '{name}'")
-                            # 1/3 happy
+                print(f"Brand '{brand}' not found in preferences for product '{name}'")
+				return happinessConstant / 2
 
-            else:
-                    print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
-                    # no happy                                                                                                             
+        print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
+		return -happinessConstant                                                                        
 		
 	
 	def compute_userHealth(self, *nutrient_diffs):
