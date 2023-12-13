@@ -24,7 +24,7 @@ class ReadDataset:
 
 # Define the environment for grocery shopping
 class GroceryEnvironment(gym.Env):
-	USER_START_HAPPINESS = 50 # percentage | relies on user preferences
+	USER_START_HAPPINESS = 100 # percentage | relies on user preferences
 	USER_START_HEALTH = 100	# percentage | assume healthy user and how the products consumed affects the users health
 	USER_TOTAL_MEALS = 14 # 1 week
 
@@ -56,13 +56,13 @@ class GroceryEnvironment(gym.Env):
 		# historical data
 		self.selectedActions = []
 
-		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}]
+		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}] | "brand" can also be an array containing multiple preferable brands
 		self.userPreferences = user_preferences
 
 		# get all available products for buy
 		refeicoes_faceis_instance = ReadDataset("{inFolder}{inFile}".format(inFolder=FOLDER, inFile=FILE))
 		
-		# sort list on product_name
+		# sort list on product_name | TODO: filter products on only ones containing nutrition information
 		self.products = sorted(refeicoes_faceis_instance.getData()["refeicoes_faceis"], key=lambda d: d['product_name'])
 		self.nr_products = len(products)
 		
@@ -139,28 +139,75 @@ class GroceryEnvironment(gym.Env):
 		pass
 
 	# return void
-	def compute_observation(self, name, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
+	def compute_observation(self, name, brand, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
 		if(self.userMealNr % 2 == 0):
-			# Compute User Happiness
-			# self.userHappiness = compute_userHappiness()
-			
 			# Compute User Health
 			self.userHealth += compute_userHealth(self, caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
-			
-			if(self.userHealth > 100): self.userHealth = USER_START_HEALTH
-			if(self.userHealth < 0): self.userHealth = 0
 		
+		# Compute User Happiness
+		self.userHappiness += compute_userHappiness(name, brand)
+
+		self.stabilizer()
+
 		self.userMealNr += 1
 		self.userCurrentBudget += cost
 
-	def compute_userHappiness(self):
-		pass
-	
-	def compute_userHealt(self, caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff):
-		healt_impact = caloriesDiff + lipidsDiff + carbosDiff + fiberDiff + proteinDiff + saltDiff
-		print("Healt Impact is: ", healt_impact)
+	def compute_userHappiness(self, name, brand):
+		for preference in self.user_preferences:
+            prod_to_be_found = preference["product"].lower()
+            brands_to_be_found = preference["brand"]
 
-		return healt_impact
+            if isinstance(brands_to_be_found, str):
+                    brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
+    
+            if prod_to_be_found in name.lower():
+                    print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
+                    # 2/3 medium happy
+
+                    if any(brand.lower() == b.lower() for b in brands_to_be_found):
+                            print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
+                            # 3/3 super happy
+
+                    else:
+                            print(f"Brand '{brand}' not found in preferences for product '{name}'")
+                            # 1/3 happy
+
+            else:
+                    print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
+                    # no happy                                                                                                             
+		
+	
+	def compute_userHealth(self, *nutrient_diffs):
+		# Define nutrient weights
+		weights = {
+			"calories": 0.4,
+			"lipids": 0.1,
+			"carbos": 0.1,
+			"fiber": 0.15,
+			"protein": 0.15,
+			"salt": 0.05
+		}
+
+		# Compute adjusted nutrient differences for lunch and dinner
+		adjusted_diffs = [diff - (diff * 0.4) if diff >= 0 else diff + (diff * 0.4) for diff in nutrient_diffs]
+
+		# Calculate nutrient impacts considering weights
+		nutrient_impact = [diff * weights[key] for key, diff in zip(weights.keys(), adjusted_diffs)]
+
+		# Compute overall health impact
+		health_impact = sum(nutrient_impact)
+		print("Health Impact is:", health_impact)
+
+		return health_impact
+
+	def stabilizer(self):
+
+		if(self.userHealth > 100): self.userHealth = USER_START_HEALTH
+		if(self.userHealth < 0): self.userHealth = 0
+
+		if(self.userHappiness > 100): self.userHappiness = USER_START_HAPPINESS
+		if(self.userHappiness < 0): self.userHappiness = 0
+
 
 	def step(self, action):
 		'''
@@ -202,7 +249,7 @@ class GroceryEnvironment(gym.Env):
 			proteinDiff = ProteinPerDay(self.protein["aux"], nutritients["proteínas"]["unit"], self.weight, self.physicalAct).compWithDailyRec()
 			saltDiff = SaltPerDay(self.salt["aux"], nutritients["sal"]["unit"]).compWithDailyRec()
 
-			self.compute_observation(sel_product["prod_name"], sel_product["prod_price"], energyDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], sel_product["prod_price"], energyDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
 
 		else:
 			self.calories["aux"] = nutritients["energia"]["value"]
@@ -212,7 +259,7 @@ class GroceryEnvironment(gym.Env):
 			self.protein["aux"] = nutritients["proteínas"]["value"]
 			self.salt["aux"] = nutritients["sal"]["value"]
 
-			self.compute_observation(sel_product["prod_name"], sel_product["prod_price"])
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], sel_product["prod_price"])
 
 		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): done = True
 
