@@ -138,13 +138,29 @@ class GroceryEnvironment(gym.Env):
 	def reward(self):
 		pass
 
+	# return void
 	def compute_observation(self, name, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
 		if(self.userMealNr % 2 == 0):
-		# compute happiness and health based on nutrition diff and preferences
+			# Compute User Happiness
+			# self.userHappiness = compute_userHappiness()
+			
+			# Compute User Health
+			self.userHealth += compute_userHealth(self, caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
+			
+			if(self.userHealth > 100): self.userHealth = USER_START_HEALTH
+			if(self.userHealth < 0): self.userHealth = 0
 		
 		self.userMealNr += 1
 		self.userCurrentBudget += cost
+
+	def compute_userHappiness(self):
 		pass
+	
+	def compute_userHealt(self, caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff):
+		healt_impact = caloriesDiff + lipidsDiff + carbosDiff + fiberDiff + proteinDiff + saltDiff
+		print("Healt Impact is: ", healt_impact)
+
+		return healt_impact
 
 	def step(self, action):
 		'''
