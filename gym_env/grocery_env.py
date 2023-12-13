@@ -62,12 +62,16 @@ class GroceryEnvironment(gym.Env):
 		# get all available products for buy
 		refeicoes_faceis_instance = ReadDataset("{inFolder}{inFile}".format(inFolder=FOLDER, inFile=FILE))
 		
-		# sort list on product_name | TODO: filter products on only ones containing nutrition information
-		self.products = sorted(refeicoes_faceis_instance.getData()["refeicoes_faceis"], key=lambda d: d['product_name'])
-		self.nr_products = len(products)
+		# sort list on product_name
+		self.sorted_products_by_name = sorted(refeicoes_faceis_instance.getData()["refeicoes_faceis"], key=lambda d: d['product_name'])
+		totalProducts = len(self.sorted_products_by_name)
+
+		# filter only on products with nutrition information
+		self.products = [product for product in self.sorted_products_by_name if len(product["prod_nutri_info"][2]) > 0]
+		self.nr_use_products = len(self.products)
 		
 		# Actions: select a product
-		self.action_space = gym.spaces.Discrete(nr_products)
+		self.action_space = gym.spaces.Discrete(self.nr_use_products)
 		
 		# Define the observation space
 		self.observation_space = Dict(self.define_obs_state())
@@ -135,8 +139,24 @@ class GroceryEnvironment(gym.Env):
 
 		return fromListToDict
 
-	def reward(self):
-		pass
+	# TODO: this is a draft for now | update it and improve
+	def compute_reward(self):
+		# Calculate budget utilization (ratio of current spent to the initial budget)
+		budget_utilization = 1 - (self.userCurrentBudget / self.userBudgetLimit)
+		
+		# Compute the reward based on different factors
+		health_reward = self.userHealth / self.USER_START_HEALTH
+		happiness_reward = self.userHappiness / self.USER_START_HAPPINESS
+
+		# Scale rewards to fit within a specified range (optional)
+		health_reward = max(min(health_reward, 1), 0)  # Ensure reward between 0 and 1
+		happiness_reward = max(min(happiness_reward, 1), 0)  # Ensure reward between 0 and 1
+		budget_utilization = max(min(budget_utilization, 1), 0)  # Ensure reward between 0 and 1
+
+		# Combine rewards with weights if needed
+		total_reward = 0.5 * health_reward + 0.3 * happiness_reward + 0.2 * budget_utilization
+
+		return total_reward
 
 	# return void
 	def compute_observation(self, name, brand, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
@@ -165,7 +185,7 @@ class GroceryEnvironment(gym.Env):
             if prod_to_be_found in name.lower():
                 print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
 
-                if any(brand.lower() == b.lower() for b in brands_to_be_found):
+                if any(b.lower() in brand.lower() for b in brands_to_be_found):
                 	print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
                 	return happinessConstant
 
@@ -216,7 +236,6 @@ class GroceryEnvironment(gym.Env):
 		self.selectedActions.append(action)
 
 		done = False
-		reward = 0
 		
 		sel_product = self.products[action]
 		nutritients = self.getNutrients(sel_product["prod_nutri_info"][2][1:])
@@ -263,6 +282,7 @@ class GroceryEnvironment(gym.Env):
 		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): done = True
 
 		observation = self.get_observation()
+		reward = self.compute_reward()
 
 		return observation, reward, done, {}
 
