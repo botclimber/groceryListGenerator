@@ -28,8 +28,6 @@ class GroceryEnvironment(gym.Env):
 	USER_START_HEALTH = 100	# percentage | assume healthy user and how the products consumed affects the users health
 	USER_TOTAL_MEALS = 14 # 1 week
 
-	nutritients = ["energia","lípidos","lípidos > saturados","lípidos > monoinsaturados","lípidos > polinsaturados","hidratos de carbono","hidratos de carbono > açúcares","hidratos de carbono > polióis","hidratos de carbono > amido","fibra","proteínas","sal","vitamina D","riboflavina","vitamina B-12","cálcio"]
-
 	def __init__(self, budget_limit, user_preferences, age, weight, height, gender, physicalAct):
 		super(GroceryEnvironment, self).__init__()
 	
@@ -54,6 +52,9 @@ class GroceryEnvironment(gym.Env):
 		self.userHappiness = USER_START_HAPPINESS
 		self.userHealth = USER_START_HEALTH
 		self.userMealNr = 1 
+
+		# historical data
+		self.selectedActions = []
 
 		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}]
 		self.userPreferences = user_preferences
@@ -123,17 +124,48 @@ class GroceryEnvironment(gym.Env):
 		# Return the initial observation
 		return self.get_observation()
 
+	def getNutrients(self, dict):
+		
+		fromListToDict = {}
+		for n in dict:
+			key = list(n.keys())[0]
+			fromListToDict[key] = {"value": n[key], "unit": n["unit"]}
+
+		return fromListToDict
+
+	def reward(self):
+		pass
+
+
 	def step(self, action):
 		'''
 		enforce Agent to not chose always the same action
 		delay reward to be sent only when step is even which represents 2 meals 1 day
 		'''
 		sel_product = self.products[action]
-
+		nutritients = self.getNutrients(self.products["prod_nutri_info"][2][1:])
+	
 		nrc = NRC(self.age, self.gender, self.weight, self.height, self.physicalAct)
 
 		bmr = nrc.calcBMR()
 		tdee = nrc.calcTDEE()
+
+		if(self.meals % 2 == 0):
+			self.calories += nutritients["energia"]["value"]
+			self.lipids += nutritients["lípidos"]["value"]
+			self.carbos += nutritients["hidratos de carbono"]["value"]
+			self.fiber += nutritients["fibra"]["value"]
+			self.protein += nutritients["proteínas"]["value"]
+			self.salt += nutritients["sal"]["value"]
+
+		else:
+			self.calories = nutritients["energia"]["value"]
+			self.lipids = nutritients["lípidos"]["value"]
+			self.carbos = nutritients["hidratos de carbono"]["value"]
+			self.fiber = nutritients["fibra"]["value"]
+			self.protein = nutritients["proteínas"]["value"]
+			self.salt = nutritients["sal"]["value"]
+
 
 		pass
 
