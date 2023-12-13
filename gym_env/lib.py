@@ -68,20 +68,20 @@ class CarbonHidratsPerDay(Nutrient):
     DAILY_RECOMMENDED = 0.5
     CONVERT_FACTOR = 4
 
-    def __init__(self, qty, unit):
+    def __init__(self, qty, unit, calories):
         self.calories = calories
         super().__init__(self, qty, unit)
     
-    def calcDailyRecPerKCAL(self):
-        # calories * DAILY_RECOMMENDED
+    def calcDailyRecPerKCAL(self, caloriesInGrams):
+        # caloriesInGrams * DAILY_RECOMMENDED
         pass
 
-    def convert_kcal_to_gram(self, kcal):
+    def convert_kcal_to_gram(self):
         # kcal / CONVERT_FACTOR
         pass
     
     def compWithDailyRec(self):
-        self.compare(self.convert_kcal_to_gram(self.calcDailyRecPerKCAL()))
+        self.compare(self.calcDailyRecPerKCAL(self.convert_kcal_to_gram()))
 
 class FiberPerDay(Nutrient):
     DAILY_RECOMMENDED = 30 # grams
@@ -93,12 +93,12 @@ class FiberPerDay(Nutrient):
         self.compare(DAILY_RECOMMENDED)
 
 class ProteinPerDay(Nutrient):
-    def __init__(self, qty, unit):
+    def __init__(self, qty, unit, weight, physicalAct):
         self.weight = weight
         self.physicalAct = physicalAct
         super().__init__(self, qty, unit)
     
-    def calcActivityFactor(self, physicalAct):
+    def calcActivityFactor(self):
         '''
         Sedentary/Lightly Active: 0.8 g/kg
         Moderate Activity: 1.0-1.2 g/kg
@@ -106,12 +106,12 @@ class ProteinPerDay(Nutrient):
         '''
         pass
 
-    def calcDailyRecPerWeightAndAct(self, weight):
+    def calcDailyRecPerWeightAndAct(self):
         # proteinDailyRec = self.weight * self.calcActivityFactor()
         pass
     
-    def compWithDailyRec(self, proteinDailyRec):
-        self.compare(proteinDailyRec)
+    def compWithDailyRec(self):
+        self.compare(self.calcDailyRecPerWeightAndAct())
 
 class SaltPerDay(Nutrient):
     '''

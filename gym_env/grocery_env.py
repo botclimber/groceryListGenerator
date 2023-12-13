@@ -40,17 +40,17 @@ class GroceryEnvironment(gym.Env):
 		self.physicalAct = physicalAct
 
 		# nutri meals info
-		self.calories = 0 # kcal (Quilocaloria PT)
-		self.lipids = 0 # g (grams)
-		self.carbos = 0 # g (grams)
-		self.fiber = 0 # g (grams)
-		self.protein = 0 # g (grams)
-		self.salt = 0 # g (grams)
+		self.calories = {"total": 0, "aux": 0} # kcal (Quilocaloria PT)
+		self.lipids = {"total": 0, "aux": 0}  # g (grams)
+		self.carbos = {"total": 0, "aux": 0}  # g (grams)
+		self.fiber = {"total": 0, "aux": 0}  # g (grams)
+		self.protein = {"total": 0, "aux": 0}  # g (grams)
+		self.salt = {"total": 0, "aux": 0}  # g (grams)
 	
 		# real time data
 		self.userCurrentBudget = budget_limit
-		self.userHappiness = USER_START_HAPPINESS
-		self.userHealth = USER_START_HEALTH
+		self.userHappiness = self.USER_START_HAPPINESS
+		self.userHealth = self.USER_START_HEALTH
 		self.userMealNr = 1 
 
 		# historical data
@@ -79,7 +79,7 @@ class GroceryEnvironment(gym.Env):
 			'happiness': gym.spaces.Box(low=0, high=100, shape=(), dtype=float),
 			'balance': gym.spaces.Box(low=0, high=self.userBudgetLimit, shape=(), dtype=float),
 			'health': gym.spaces.Box(low=0, high=100, shape=(), dtype=float),
-			'meal': gym.spaces.Box(low=0, high=USER_TOTAL_MEALS, shape=(), dtype=int),
+			'meal': gym.spaces.Box(low=0, high=self.USER_TOTAL_MEALS, shape=(), dtype=int),
 			'age': gym.spaces.Box(low=0, high=120, shape=(), dtype=int),
 			'weight': gym.spaces.Box(low=0, high=np.inf, shape=(), dtype=int),
 			'height': gym.spaces.Box(low=0, high=np.inf, shape=(), dtype=int),
@@ -107,8 +107,8 @@ class GroceryEnvironment(gym.Env):
 
 	def reset(self):
 		# random budget and preferences for training reasons
-		self.userCurrentBudget = random_budget
-		
+		self.userCurrentBudget = random.randint(20, 250)
+
 		self.age = random.randint(1, 120) 
 		self.gender = random.randint(0, 1)
 		self.weight = random.randint(40, 200)
@@ -117,9 +117,11 @@ class GroceryEnvironment(gym.Env):
 
 		#self.userPreferences = random_preferences
 
-		self.userHappiness = USER_START_HAPPINESS
-		self.userHealth = USER_START_HEALTH
+		self.userHappiness = self.USER_START_HAPPINESS
+		self.userHealth = self.USER_START_HEALTH
 		self.userMealNr = 1
+
+		self.selectedActions = []
 
 		# Return the initial observation
 		return self.get_observation()
@@ -136,38 +138,71 @@ class GroceryEnvironment(gym.Env):
 	def reward(self):
 		pass
 
+	def compute_observation(self, name, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
+		if(self.userMealNr % 2 == 0):
+		# compute happiness and health based on nutrition diff and preferences
+		
+		self.userMealNr += 1
+		self.userCurrentBudget += cost
+		pass
 
 	def step(self, action):
 		'''
 		enforce Agent to not chose always the same action
 		delay reward to be sent only when step is even which represents 2 meals 1 day
 		'''
+		self.selectedActions.append(action)
+
+		done = False
+		reward = 0
+		
 		sel_product = self.products[action]
-		nutritients = self.getNutrients(self.products["prod_nutri_info"][2][1:])
+		nutritients = self.getNutrients(sel_product["prod_nutri_info"][2][1:])
+
+		self.calories["total"] += nutritients["energia"]["value"]
+		self.lipids["total"] += nutritients["lípidos"]["value"]
+		self.carbos["total"] += nutritients["hidratos de carbono"]["value"]
+		self.fiber["total"] += nutritients["fibra"]["value"]
+		self.protein["total"] += nutritients["proteínas"]["value"]
+		self.salt["total"] += nutritients["sal"]["value"]
 	
 		nrc = NRC(self.age, self.gender, self.weight, self.height, self.physicalAct)
 
 		bmr = nrc.calcBMR()
 		tdee = nrc.calcTDEE()
 
-		if(self.meals % 2 == 0):
-			self.calories += nutritients["energia"]["value"]
-			self.lipids += nutritients["lípidos"]["value"]
-			self.carbos += nutritients["hidratos de carbono"]["value"]
-			self.fiber += nutritients["fibra"]["value"]
-			self.protein += nutritients["proteínas"]["value"]
-			self.salt += nutritients["sal"]["value"]
+		if(self.userMealNr % 2 == 0):
+			self.calories["aux"] += nutritients["energia"]["value"]
+			self.lipids["aux"]  += nutritients["lípidos"]["value"]
+			self.carbos["aux"]  += nutritients["hidratos de carbono"]["value"]
+			self.fiber["aux"]  += nutritients["fibra"]["value"]
+			self.protein["aux"]  += nutritients["proteínas"]["value"]
+			self.salt["aux"]  += nutritients["sal"]["value"]
+
+			energyDiff = EnergyPerDay(self.calories["aux"], nutritients["energia"]["unit"]).compWithDailyRec(tdee)
+			lipidsDiff = LipidsPerDay(self.lipids["aux"], nutritients["lípidos"]["unit"], self.calories["aux"]).compWithDailyRec()
+			carbosDiff = CarbonHidratsPerDay(self.carbos["aux"], nutritients["hidratos de carbono"]["unit"], self.calories["aux"]).compWithDailyRec()
+			fiberDiff = FiberPerDay(self.fiber["aux"], nutritients["fibra"]["unit"]).compWithDailyRec()
+			proteinDiff = ProteinPerDay(self.protein["aux"], nutritients["proteínas"]["unit"], self.weight, self.physicalAct).compWithDailyRec()
+			saltDiff = SaltPerDay(self.salt["aux"], nutritients["sal"]["unit"]).compWithDailyRec()
+
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_price"], energyDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
 
 		else:
-			self.calories = nutritients["energia"]["value"]
-			self.lipids = nutritients["lípidos"]["value"]
-			self.carbos = nutritients["hidratos de carbono"]["value"]
-			self.fiber = nutritients["fibra"]["value"]
-			self.protein = nutritients["proteínas"]["value"]
-			self.salt = nutritients["sal"]["value"]
+			self.calories["aux"] = nutritients["energia"]["value"]
+			self.lipids["aux"] = nutritients["lípidos"]["value"]
+			self.carbos["aux"] = nutritients["hidratos de carbono"]["value"]
+			self.fiber["aux"] = nutritients["fibra"]["value"]
+			self.protein["aux"] = nutritients["proteínas"]["value"]
+			self.salt["aux"] = nutritients["sal"]["value"]
 
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_price"])
 
-		pass
+		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): done = True
+
+		observation = self.get_observation()
+
+		return observation, reward, done, {}
 
 	def render(self):
 		pass
