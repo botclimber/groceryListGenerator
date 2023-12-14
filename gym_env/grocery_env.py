@@ -1,4 +1,7 @@
 import gym 
+import re
+
+from gym.spaces import Dict
 from stable_baselines3 import PPO 
 from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -6,7 +9,7 @@ import json
 import numpy as np
 import random
 
-import lib
+from lib import *
 
 FOLDER = "../../data/"
 FILE = "continente_dataset_detailed_2023129.json"
@@ -35,8 +38,8 @@ class GroceryEnvironment(gym.Env):
 		self.userBudgetLimit = budget_limit
 		self.age = age
 		self.weight = weight
-		self.gender = gender
-		self.height = height
+		self.gender = gender # 0 - women | 1 - men
+		self.height = height # in cm
 		self.physicalAct = physicalAct
 
 		# nutri meals info
@@ -55,6 +58,7 @@ class GroceryEnvironment(gym.Env):
 
 		# historical data
 		self.selectedActions = []
+		self.startedBudget = 0
 
 		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}] | "brand" can also be an array containing multiple preferable brands
 		self.userPreferences = user_preferences
@@ -63,32 +67,36 @@ class GroceryEnvironment(gym.Env):
 		refeicoes_faceis_instance = ReadDataset("{inFolder}{inFile}".format(inFolder=FOLDER, inFile=FILE))
 		
 		# sort list on product_name
-		self.sorted_products_by_name = sorted(refeicoes_faceis_instance.getData()["refeicoes_faceis"], key=lambda d: d['product_name'])
+		self.sorted_products_by_name = sorted(refeicoes_faceis_instance.getData()["refeicoes_rapidas"], key=lambda d: d['prod_name'])
 		totalProducts = len(self.sorted_products_by_name)
 
 		# filter only on products with nutrition information
 		self.products = [product for product in self.sorted_products_by_name if len(product["prod_nutri_info"][2]) > 0]
 		self.nr_use_products = len(self.products)
 		
+		print("TOTAL PRODUCTS: ", totalProducts)
+		print("AVAILABLE PRODUCTS: ", self.nr_use_products)
+
 		# Actions: select a product
 		self.action_space = gym.spaces.Discrete(self.nr_use_products)
 		
 		# Define the observation space
 		self.observation_space = Dict(self.define_obs_state())
 		
+		print(self.action_space)
 		print(self.observation_space)		
 
 	def define_obs_state(self):
 		return {
-			'happiness': gym.spaces.Box(low=0, high=100, shape=(), dtype=float),
-			'balance': gym.spaces.Box(low=0, high=self.userBudgetLimit, shape=(), dtype=float),
-			'health': gym.spaces.Box(low=0, high=100, shape=(), dtype=float),
-			'meal': gym.spaces.Box(low=0, high=self.USER_TOTAL_MEALS, shape=(), dtype=int),
-			'age': gym.spaces.Box(low=0, high=120, shape=(), dtype=int),
-			'weight': gym.spaces.Box(low=0, high=np.inf, shape=(), dtype=int),
-			'height': gym.spaces.Box(low=0, high=np.inf, shape=(), dtype=int),
-			'gender': gym.spaces.Box(low=0, high=1, shape=(), dtype=int),
-			'physicalAct': gym.spaces.Box(low=0, high=10, shape=(), dtype=int),
+			'happiness': gym.spaces.Box(low=0, high=100, shape=(1,), dtype=float),
+			'balance': gym.spaces.Box(low=0, high=self.userBudgetLimit, shape=(1,), dtype=float),
+			'health': gym.spaces.Box(low=0, high=100, shape=(1,), dtype=float),
+			'meal': gym.spaces.Box(low=0, high=self.USER_TOTAL_MEALS, shape=(1,), dtype=int),
+			'age': gym.spaces.Box(low=0, high=110, shape=(1,), dtype=int),
+			'weight': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=int),
+			'height': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=int),
+			'gender': gym.spaces.Box(low=0, high=1, shape=(1,), dtype=int),
+			'physicalAct': gym.spaces.Box(low=0, high=10, shape=(1,), dtype=int),
 			#'preferences': None TODO: define all possible preferences and five user only possibility to chose between
 			# Add other attributes as needed
 		}
@@ -112,14 +120,15 @@ class GroceryEnvironment(gym.Env):
 	def reset(self):
 		# random budget and preferences for training reasons
 		self.userCurrentBudget = random.randint(20, 250)
+		self.startedBudget = self.userCurrentBudget
 
-		self.age = random.randint(1, 120) 
+		self.age = random.randint(1, 110) 
 		self.gender = random.randint(0, 1)
 		self.weight = random.randint(40, 200)
-		self.height = round(random.uniform(1, 2.10),2)
+		self.height = random.randint(100, 210)
 		self.physicalAct = random.randint(0, 10)		
 
-		#self.userPreferences = random_preferences
+		self.userPreferences = []
 
 		self.userHappiness = self.USER_START_HAPPINESS
 		self.userHealth = self.USER_START_HEALTH
@@ -128,6 +137,7 @@ class GroceryEnvironment(gym.Env):
 		self.selectedActions = []
 
 		# Return the initial observation
+		print(self.get_observation())
 		return self.get_observation()
 
 	def getNutrients(self, dict):
@@ -139,64 +149,57 @@ class GroceryEnvironment(gym.Env):
 
 		return fromListToDict
 
-	# TODO: this is a draft for now | update it and improve
 	def compute_reward(self):
-		# Calculate budget utilization (ratio of current spent to the initial budget)
-		budget_utilization = 1 - (self.userCurrentBudget / self.userBudgetLimit)
-		
-		# Compute the reward based on different factors
-		health_reward = self.userHealth / self.USER_START_HEALTH
-		happiness_reward = self.userHappiness / self.USER_START_HAPPINESS
-
-		# Scale rewards to fit within a specified range (optional)
-		health_reward = max(min(health_reward, 1), 0)  # Ensure reward between 0 and 1
-		happiness_reward = max(min(happiness_reward, 1), 0)  # Ensure reward between 0 and 1
-		budget_utilization = max(min(budget_utilization, 1), 0)  # Ensure reward between 0 and 1
-
 		# Combine rewards with weights if needed
-		total_reward = 0.5 * health_reward + 0.3 * happiness_reward + 0.2 * budget_utilization
+		reward = self.userHealth + self.userHappiness + self.userCurrentBudget
 
-		return total_reward
+		return reward
 
 	# return void
 	def compute_observation(self, name, brand, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
 		if(self.userMealNr % 2 == 0):
 			# Compute User Health
-			self.userHealth += compute_userHealth(self, caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
+			self.userHealth += self.compute_userHealth(caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
 		
 		# Compute User Happiness
-		self.userHappiness += compute_userHappiness(name, brand)
+		self.userHappiness += self.compute_userHappiness(name, brand)
 
 		self.stabilizer()
 
-		self.userMealNr += 1
 		self.userCurrentBudget -= cost
 
 	def compute_userHappiness(self, name, brand):
+		if not self.userPreferences:
+			return 0
+
 		happinessConstant = 100 / USER_TOTAL_MEALS
 
-		for preference in self.user_preferences:
-        	prod_to_be_found = preference["product"].lower()
-        	brands_to_be_found = preference["brand"]
+		for preference in self.userPreferences:
+			prod_to_be_found = preference["product"].lower()
+			brands_to_be_found = preference["brand"]
 
-            if isinstance(brands_to_be_found, str):
-            	brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
-    
-            if prod_to_be_found in name.lower():
-                print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
+			if isinstance(brands_to_be_found, str):
+				brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
 
-                if any(b.lower() in brand.lower() for b in brands_to_be_found):
-                	print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
-                	return happinessConstant
+			if prod_to_be_found in name.lower():
+				print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
 
-                print(f"Brand '{brand}' not found in preferences for product '{name}'")
+				if any(b.lower() in brand.lower() for b in brands_to_be_found):
+					print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
+					return happinessConstant
+
+				print(f"Brand '{brand}' not found in preferences for product '{name}'")
 				return happinessConstant / 2
 
-        print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
-		return -happinessConstant                                                                        
+		print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
+		return -happinessConstant                                                                  
 		
 	
-	def compute_userHealth(self, *nutrient_diffs):
+	def compute_userHealth(self, diffCalories, diffLipids, diffCarbos, diffFiber, diffProtein, diffSalt):
+		deviation = 0.4 # consider a percentage from breakfast, mid-morning snack, mid-afternoon snack, before bed snack
+		nutrient_diffs = [diffCalories, diffLipids, diffCarbos, diffFiber, diffProtein, diffSalt]
+		
+		print("NUTRIENTS DIFF", nutrient_diffs)
 		# Define nutrient weights
 		weights = {
 			"calories": 0.4,
@@ -208,82 +211,156 @@ class GroceryEnvironment(gym.Env):
 		}
 
 		# Compute adjusted nutrient differences for lunch and dinner
-		adjusted_diffs = [diff - (diff * 0.4) if diff >= 0 else diff + (diff * 0.4) for diff in nutrient_diffs]
+		adjusted_diffs = [diffValue - (diffValue * deviation) for diffValue in nutrient_diffs]
+
+		print(f"ADJUSTED_DIFFS: {adjusted_diffs}")
 
 		# Calculate nutrient impacts considering weights
-		nutrient_impact = [diff * weights[key] for key, diff in zip(weights.keys(), adjusted_diffs)]
+		nutrient_impact = [diffValue * weights[key] for key, diffValue in zip(weights.keys(), adjusted_diffs)]
+
+		print(f"NUTRIENT_IMPACT: {nutrient_impact}")
 
 		# Compute overall health impact
-		health_impact = sum(nutrient_impact)
+		health_impact = sum(nutr if nutr < 0 else -nutr for nutr in nutrient_impact) / self.USER_START_HEALTH
 		print("Health Impact is:", health_impact)
 
 		return health_impact
 
 	def stabilizer(self):
 
-		if(self.userHealth > 100): self.userHealth = USER_START_HEALTH
+		if(self.userHealth > 100): self.userHealth = self.USER_START_HEALTH
 		if(self.userHealth < 0): self.userHealth = 0
 
-		if(self.userHappiness > 100): self.userHappiness = USER_START_HAPPINESS
+		if(self.userHappiness > 100): self.userHappiness = self.USER_START_HAPPINESS
 		if(self.userHappiness < 0): self.userHappiness = 0
 
+	def get_parsed_value(self, dictionary, key):
+		try:
+			return float(dictionary[key]["value"]), dictionary[key]["unit"]
+		except (KeyError, TypeError):
+			return 0, None
+
+	def get_quantity(self, prod_qty):
+		patternNrUnit = r'\b\d+\s*gr\b'
+		patternNr = r'\d+'
+
+		matches = re.findall(patternNrUnit, prod_qty)
+		print(f"\n\t\t NR of QUANTITIES FOUND ({len(matches)}) \n")
+
+		if not matches:
+			print(f"\n\t\t Quantity not found, using default 100g \n")
+			return 100.0
+		
+		else:
+			qty = float(re.findall(patternNr, matches[0])[0])
+			print(f"\n\t\t Found {qty}g \n")
+			return qty
 
 	def step(self, action):
 		'''
 		enforce Agent to not chose always the same action
 		delay reward to be sent only when step is even which represents 2 meals 1 day
 		'''
+		print(" \n ------ Currently on Meal nr ", self.userMealNr," with action nr ", action,"  ------ \n")
 		self.selectedActions.append(action)
 
 		done = False
 		
 		sel_product = self.products[action]
+		
+		prod_qty = self.get_quantity(sel_product["prod_qty"])
+		nutri_portion = float(sel_product["prod_nutri_info"][0])
+		qtyByPortion = prod_qty / nutri_portion
+
 		nutritients = self.getNutrients(sel_product["prod_nutri_info"][2][1:])
 
-		self.calories["total"] += nutritients["energia"]["value"]
-		self.lipids["total"] += nutritients["lípidos"]["value"]
-		self.carbos["total"] += nutritients["hidratos de carbono"]["value"]
-		self.fiber["total"] += nutritients["fibra"]["value"]
-		self.protein["total"] += nutritients["proteínas"]["value"]
-		self.salt["total"] += nutritients["sal"]["value"]
+		parsed_price = float(sel_product["prod_price"])
+		
+		energy_amount, unit_energy = self.get_parsed_value(nutritients, "energia")
+		lipids_amount, unit_lipids = self.get_parsed_value(nutritients, "lípidos")
+		carbos_amount, unit_carbos = self.get_parsed_value(nutritients, "hidratos de carbono")
+		fiber_amount, unit_fiber = self.get_parsed_value(nutritients, "fibra")
+		protein_amount, unit_protein = self.get_parsed_value(nutritients, "proteínas")
+		salt_amount, unit_salt = self.get_parsed_value(nutritients, "sal")
+
+		parsed_energy = qtyByPortion * energy_amount
+		parsed_lipids = qtyByPortion * lipids_amount
+		parsed_carbos = qtyByPortion * carbos_amount
+		parsed_fiber = qtyByPortion * fiber_amount
+		parsed_protein = qtyByPortion * protein_amount
+		parsed_salt = qtyByPortion * salt_amount
+
+		self.calories["total"] += parsed_energy
+		self.lipids["total"] += parsed_lipids
+		self.carbos["total"] += parsed_carbos
+		self.fiber["total"] += parsed_fiber
+		self.protein["total"] += parsed_protein
+		self.salt["total"] += parsed_salt
 	
 		nrc = NRC(self.age, self.gender, self.weight, self.height, self.physicalAct)
+		tdee = round(nrc.calcTDEE(), 3)
 
-		bmr = nrc.calcBMR()
-		tdee = nrc.calcTDEE()
+		print(f"\t\t Selected Product: ")
+		print(f"\t\t\t NAME: {sel_product['prod_name']}")
+		print(f"\t\t\t QUANTITY: {prod_qty} ")
+		print(f"\t\t\t PRICE: {parsed_price} ")
+		print(f"\t\t\t NUTRITION INFO (b/Qty): ")
+		print(f"\t\t\t\t Energy (kcal): {parsed_energy} ")
+		print(f"\t\t\t\t Lipids (g): {parsed_lipids} ")
+		print(f"\t\t\t\t Carbos (g): {parsed_carbos} ")
+		print(f"\t\t\t\t Fiber (g): {parsed_fiber}")
+		print(f"\t\t\t\t Protein (g): {parsed_protein}")
+		print(f"\t\t\t\t Salt (g): {parsed_salt}")
+
+		print(f"\t\tTOTAL DAILY ENERGY EXPENDITURE (TDEE) is {tdee}")
+		
 
 		if(self.userMealNr % 2 == 0):
-			self.calories["aux"] += nutritients["energia"]["value"]
-			self.lipids["aux"]  += nutritients["lípidos"]["value"]
-			self.carbos["aux"]  += nutritients["hidratos de carbono"]["value"]
-			self.fiber["aux"]  += nutritients["fibra"]["value"]
-			self.protein["aux"]  += nutritients["proteínas"]["value"]
-			self.salt["aux"]  += nutritients["sal"]["value"]
+			self.calories["aux"] += parsed_energy
+			self.lipids["aux"] += parsed_lipids
+			self.carbos["aux"] += parsed_carbos
+			self.fiber["aux"] += parsed_fiber
+			self.protein["aux"] += parsed_protein
+			self.salt["aux"] += parsed_salt
 
-			energyDiff = EnergyPerDay(self.calories["aux"], nutritients["energia"]["unit"]).compWithDailyRec(tdee)
-			lipidsDiff = LipidsPerDay(self.lipids["aux"], nutritients["lípidos"]["unit"], self.calories["aux"]).compWithDailyRec()
-			carbosDiff = CarbonHidratsPerDay(self.carbos["aux"], nutritients["hidratos de carbono"]["unit"], self.calories["aux"]).compWithDailyRec()
-			fiberDiff = FiberPerDay(self.fiber["aux"], nutritients["fibra"]["unit"]).compWithDailyRec()
-			proteinDiff = ProteinPerDay(self.protein["aux"], nutritients["proteínas"]["unit"], self.weight, self.physicalAct).compWithDailyRec()
-			saltDiff = SaltPerDay(self.salt["aux"], nutritients["sal"]["unit"]).compWithDailyRec()
+			print(f"\t\tSAVED Nutrition Information: Calories: {self.calories['aux']} | Lipids: {self.lipids['aux']} | Carbos: {self.carbos['aux']} | Fiber: {self.fiber['aux']} | Protein: {self.protein['aux']} | Salt: {self.salt['aux']}")
 
-			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], sel_product["prod_price"], energyDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
+			energyDiff = EnergyPerDay(self.calories["aux"], unit_energy).compWithDailyRec(tdee)
+			lipidsDiff = LipidsPerDay(self.lipids["aux"], unit_lipids, self.calories["aux"]).compWithDailyRec()
+			carbosDiff = CarbonHidratsPerDay(self.carbos["aux"], unit_carbos, self.calories["aux"]).compWithDailyRec()
+			fiberDiff = FiberPerDay(self.fiber["aux"], unit_fiber).compWithDailyRec()
+			proteinDiff = ProteinPerDay(self.protein["aux"], unit_protein, self.weight, self.physicalAct).compWithDailyRec()
+			saltDiff = SaltPerDay(self.salt["aux"], unit_salt).compWithDailyRec()
+
+			print(f"\t\tCOMPUTED DAILY NUTRITION DIFFs -> Energy: {energyDiff} | LIPIDS: {lipidsDiff} | CARBOS: {carbosDiff} | FIBER: {fiberDiff} | PROTEIN: {proteinDiff} | SALT: {saltDiff}")
+
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], parsed_price, energyDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
 
 		else:
-			self.calories["aux"] = nutritients["energia"]["value"]
-			self.lipids["aux"] = nutritients["lípidos"]["value"]
-			self.carbos["aux"] = nutritients["hidratos de carbono"]["value"]
-			self.fiber["aux"] = nutritients["fibra"]["value"]
-			self.protein["aux"] = nutritients["proteínas"]["value"]
-			self.salt["aux"] = nutritients["sal"]["value"]
+			self.calories["aux"] = parsed_energy
+			self.lipids["aux"] = parsed_lipids
+			self.carbos["aux"] = parsed_carbos
+			self.fiber["aux"] = parsed_fiber
+			self.protein["aux"] = parsed_protein
+			self.salt["aux"] = parsed_salt
 
-			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], sel_product["prod_price"])
+			print(f"\t\tSAVED Nutrition Information: Calories: {self.calories['aux']} | Lipids: {self.lipids['aux']} | Carbos: {self.carbos['aux']} | Fiber: {self.fiber['aux']} | Protein: {self.protein['aux']} | Salt: {self.salt['aux']}")
 
-		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): done = True
+			self.compute_observation(sel_product["prod_name"], sel_product["prod_brand"], parsed_price)
+
+		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): 
+			done = True
+			print(f'\t\tTOTAL NUTRIENTS COMPUTED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}')
+			print(f"\t\tACTION HISTORY: [{self.selectedActions}]")
+			print(f"\t\tTotal money spent: [{(self.startedBudget) - self.userCurrentBudget}]")
 
 		observation = self.get_observation()
 		reward = self.compute_reward()
 
+		print(f"\n\t\t REWARD: ({reward}) \n")
+		print(f"\n\t\t OBSERVATION: ({observation}) \n")
+
+		self.userMealNr += 1
 		return observation, reward, done, {}
 
 	def render(self):

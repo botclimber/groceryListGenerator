@@ -39,6 +39,7 @@ for x in user_preferences:
 	#	print("prod ",whatToBeFound," not found in ",whereToFind)
 
 '''
+'''
 user_preferences = [
     {"product": "arroz", "brand": ["continente", "deluxe"]},
     {"product": "massa com gambas", "brand": "continente"},
@@ -69,3 +70,21 @@ for preference in user_preferences:
 			else:
 				print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
 				# no happy    
+'''
+
+import re
+
+text = "emb. 220    gr (2 un)"
+patternNrUnit = r'\b\d+\s*gr\b'
+patternNr = r'\d+'
+
+matches = re.findall(patternNrUnit, text)
+match = re.findall(patternNr, matches[0])
+
+nr = float(match[0])
+
+print(nr)
+print(matches)
+
+
+
