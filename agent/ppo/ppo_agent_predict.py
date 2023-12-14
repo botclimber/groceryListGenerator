@@ -8,13 +8,12 @@ from stable_baselines3 import PPO
 import numpy as np
 from grocery_env import GroceryEnvironment
 
-
 env = GroceryEnvironment()
 
 model = PPO.load("ppo_mealPlanner")
 
 userCurrentBudget = 50
-userPreferences = []
+userPreferences = [] # array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}] | "brand" in case of no brand preference just dont mention it, otherwise you can either chose one or more preferrable brands
 age = 27
 weight = 69
 height = 175

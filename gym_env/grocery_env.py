@@ -131,49 +131,54 @@ class GroceryEnvironment(gym.Env):
 
 		return fromListToDict
 
+	# TODO: give bad reward in case of selecting same action
 	def compute_reward(self):
 		# Combine rewards with weights if needed
 		reward = self.userHealth + self.userHappiness + self.userCurrentBudget
 
-		return reward
+		return round(reward, 2)
 
 	# return void
 	def compute_observation(self, name, brand, cost, caloriesDiff = None, lipidsDiff = None, carbosDiff = None, fiberDiff = None, proteinDiff = None, saltDiff = None):
 		if(self.userMealNr % 2 == 0):
 			# Compute User Health
-			self.userHealth += self.compute_userHealth(caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff)
+			self.userHealth += round(self.compute_userHealth(caloriesDiff, lipidsDiff, carbosDiff, fiberDiff, proteinDiff, saltDiff), 2)
 		
 		# Compute User Happiness
-		self.userHappiness += self.compute_userHappiness(name, brand)
+		self.userHappiness += round(self.compute_userHappiness(name, brand), 2)
 
 		self.stabilizer()
 
-		self.userCurrentBudget -= cost
+		self.userCurrentBudget -= round(cost, 2)
 
 	def compute_userHappiness(self, name, brand):
 		if not self.userPreferences:
 			return 0
 
-		happinessConstant = 100 / USER_TOTAL_MEALS
+		happinessConstant = 100 / self.USER_TOTAL_MEALS
 
 		for preference in self.userPreferences:
 			prod_to_be_found = preference["product"].lower()
-			brands_to_be_found = preference["brand"]
+			
+			try:
+				brands_to_be_found = preference["brand"]
+			except:
+				brands_to_be_found = None
 
 			if isinstance(brands_to_be_found, str):
 				brands_to_be_found = [brands_to_be_found]  # Convert to list if it's a string
 
 			if prod_to_be_found in name.lower():
-				print(f"Product name '{prod_to_be_found}' found in preferences for product '{name}'")
+				print(f"\n\t\tProduct name '{prod_to_be_found}' found in preferences for product '{name}'")
 
-				if any(b.lower() in brand.lower() for b in brands_to_be_found):
-					print(f"Both product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
+				if brands_to_be_found is not None and any(b.lower() in brand.lower() for b in brands_to_be_found):
+					print(f"\t\tBoth product '{prod_to_be_found}' and brand '{brand}' found in preferences for product '{name}'")
 					return happinessConstant
 
-				print(f"Brand '{brand}' not found in preferences for product '{name}'")
+				print(f"\t\tBrand '{brand}' not found in preferences for product '{name}'")
 				return happinessConstant / 2
 
-		print(f"Product name '{prod_to_be_found}' not found in preferences for product '{name}'")
+		print(f"\n\t\tProduct name '{prod_to_be_found}' not found in preferences for product '{name}'")
 		return -happinessConstant                                                                  
 		
 	
@@ -181,7 +186,7 @@ class GroceryEnvironment(gym.Env):
 		deviation = 0.4 # consider a percentage from breakfast, mid-morning snack, mid-afternoon snack, before bed snack
 		nutrient_diffs = [diffCalories, diffLipids, diffCarbos, diffFiber, diffProtein, diffSalt]
 		
-		print("NUTRIENTS DIFF", nutrient_diffs)
+		print("\n\t\tNUTRIENTS DIFF", nutrient_diffs)
 		# Define nutrient weights
 		weights = {
 			"calories": 0.4,
@@ -195,16 +200,16 @@ class GroceryEnvironment(gym.Env):
 		# Compute adjusted nutrient differences for lunch and dinner
 		adjusted_diffs = [diffValue - (diffValue * deviation) for diffValue in nutrient_diffs]
 
-		print(f"ADJUSTED_DIFFS: {adjusted_diffs}")
+		print(f"\t\tADJUSTED_DIFFS: {adjusted_diffs}")
 
 		# Calculate nutrient impacts considering weights
 		nutrient_impact = [diffValue * weights[key] for key, diffValue in zip(weights.keys(), adjusted_diffs)]
 
-		print(f"NUTRIENT_IMPACT: {nutrient_impact}")
+		print(f"\t\tNUTRIENT_IMPACT: {nutrient_impact}")
 
 		# Compute overall health impact
 		health_impact = sum(nutr if nutr < 0 else -nutr for nutr in nutrient_impact) / self.USER_START_HEALTH
-		print("Health Impact is:", health_impact)
+		print("\t\tHealth Impact is:", health_impact)
 
 		return health_impact
 
@@ -332,7 +337,7 @@ class GroceryEnvironment(gym.Env):
 
 		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): 
 			done = True
-			print(f'\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}')
+			print(f'\n\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}')
 			print(f"\t\tACTION HISTORY: [{self.selectedActions}]")
 			print(f"\t\tTotal money spent: [{(self.startedBudget) - self.userCurrentBudget}]")
 
@@ -352,7 +357,7 @@ class GroceryEnvironment(gym.Env):
 		for action in self.selectedActions:
 			print(f"\t\t\t {self.products[action]['prod_name']} | {self.products[action]['prod_brand']} | {self.products[action]['prod_price']} | {self.products[action]['prod_qty']}")
 		
-		print(f"\n\t\t {(self.startedBudget) - self.userCurrentBudget} spent from given {self.startedBudget} budget limit.")
+		print(f"\n\t\t {round((self.startedBudget) - self.userCurrentBudget, 2)} spent from given {self.startedBudget} budget limit.")
 		print(f'\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}.')
 
 	def close(self):
