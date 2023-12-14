@@ -2,8 +2,6 @@ import gym
 import re
 
 from gym.spaces import Dict
-from stable_baselines3 import PPO 
-from stable_baselines3.common.vec_env import DummyVecEnv
 
 import json
 import numpy as np
@@ -31,17 +29,8 @@ class GroceryEnvironment(gym.Env):
 	USER_START_HEALTH = 100	# percentage | assume healthy user and how the products consumed affects the users health
 	USER_TOTAL_MEALS = 14 # 1 week
 
-	def __init__(self, budget_limit, user_preferences, age, weight, height, gender, physicalAct):
+	def __init__(self):
 		super(GroceryEnvironment, self).__init__()
-	
-		# user info
-		self.userBudgetLimit = budget_limit
-		self.age = age
-		self.weight = weight
-		self.gender = gender # 0 - women | 1 - men
-		self.height = height # in cm
-		self.physicalAct = physicalAct
-
 		# nutri meals info
 		self.calories = {"total": 0, "aux": 0} # kcal (Quilocaloria PT)
 		self.lipids = {"total": 0, "aux": 0}  # g (grams)
@@ -49,19 +38,6 @@ class GroceryEnvironment(gym.Env):
 		self.fiber = {"total": 0, "aux": 0}  # g (grams)
 		self.protein = {"total": 0, "aux": 0}  # g (grams)
 		self.salt = {"total": 0, "aux": 0}  # g (grams)
-	
-		# real time data
-		self.userCurrentBudget = budget_limit
-		self.userHappiness = self.USER_START_HAPPINESS
-		self.userHealth = self.USER_START_HEALTH
-		self.userMealNr = 1 
-
-		# historical data
-		self.selectedActions = []
-		self.startedBudget = 0
-
-		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}] | "brand" can also be an array containing multiple preferable brands
-		self.userPreferences = user_preferences
 
 		# get all available products for buy
 		refeicoes_faceis_instance = ReadDataset("{inFolder}{inFile}".format(inFolder=FOLDER, inFile=FILE))
@@ -81,22 +57,19 @@ class GroceryEnvironment(gym.Env):
 		self.action_space = gym.spaces.Discrete(self.nr_use_products)
 		
 		# Define the observation space
-		self.observation_space = Dict(self.define_obs_state())
-		
-		print(self.action_space)
-		print(self.observation_space)		
+		self.observation_space = Dict(self.define_obs_state())		
 
 	def define_obs_state(self):
 		return {
 			'happiness': gym.spaces.Box(low=0, high=100, shape=(1,), dtype=float),
-			'balance': gym.spaces.Box(low=0, high=self.userBudgetLimit, shape=(1,), dtype=float),
+			'balance': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=float),
 			'health': gym.spaces.Box(low=0, high=100, shape=(1,), dtype=float),
 			'meal': gym.spaces.Box(low=0, high=self.USER_TOTAL_MEALS, shape=(1,), dtype=int),
 			'age': gym.spaces.Box(low=0, high=110, shape=(1,), dtype=int),
 			'weight': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=int),
 			'height': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=int),
 			'gender': gym.spaces.Box(low=0, high=1, shape=(1,), dtype=int),
-			'physicalAct': gym.spaces.Box(low=0, high=10, shape=(1,), dtype=int),
+			'physicalAct': gym.spaces.Box(low=0, high=10, shape=(1,), dtype=int)
 			#'preferences': None TODO: define all possible preferences and five user only possibility to chose between
 			# Add other attributes as needed
 		}
@@ -104,31 +77,41 @@ class GroceryEnvironment(gym.Env):
 	def get_observation(self):
 		# Return the current observation based on user attributes
 		observation = {
-			'happiness': self.userHappiness,
-			'balance': self.userCurrentBudget,
-			'health': self.userHealth,
-			'meal': self.userMealNr,
-			'age': self.age,
-			'weight': self.weight,
-			'height': self.height, 
-			'gender': self.gender,
-			'physicalAct': self.physicalAct
+			'happiness': np.array([self.userHappiness]),
+			'balance': np.array([self.userCurrentBudget]),
+			'health': np.array([self.userHealth]),
+			'meal': np.array([self.userMealNr]),
+			'age': np.array([self.age]),
+			'weight': np.array([self.weight]),
+			'height': np.array([self.height]), 
+			'gender': np.array([self.gender]),
+			'physicalAct': np.array([self.physicalAct])
 		}
 
 		return observation
 
-	def reset(self):
+	def reset(self, u_budget = None, u_preferences = None, age = None, weight = None, height = None, gender = None, physicalAct = None):
+
+		# user info
 		# random budget and preferences for training reasons
-		self.userCurrentBudget = random.randint(20, 250)
+		self.userCurrentBudget = random.randint(20, 250) if u_budget is None else u_budget
+		self.age = random.randint(1, 110) if age is None else age
+		self.gender = random.randint(0, 1) if gender is None else gender # 0 - women | 1 - men
+		self.weight = random.randint(40, 200) if weight is None else weight
+		self.height = random.randint(100, 210) if height is None else height # in cm
+		self.physicalAct = random.randint(0, 10) if physicalAct is None else physicalAct # from 0 to 10		
+
+		# array of dictionaries with user preferrable items e.g. [{"product":"arroz", "brand":"continente"}] | "brand" can also be an array containing multiple preferable brands
+		self.userPreferences = [] if u_preferences is None else u_preferences
+
 		self.startedBudget = self.userCurrentBudget
 
-		self.age = random.randint(1, 110) 
-		self.gender = random.randint(0, 1)
-		self.weight = random.randint(40, 200)
-		self.height = random.randint(100, 210)
-		self.physicalAct = random.randint(0, 10)		
-
-		self.userPreferences = []
+		self.calories["total"] = 0
+		self.lipids["total"] = 0
+		self.carbos["total"] = 0
+		self.fiber["total"] = 0
+		self.protein["total"] = 0
+		self.salt["total"] = 0
 
 		self.userHappiness = self.USER_START_HAPPINESS
 		self.userHealth = self.USER_START_HEALTH
@@ -136,7 +119,6 @@ class GroceryEnvironment(gym.Env):
 
 		self.selectedActions = []
 
-		# Return the initial observation
 		print(self.get_observation())
 		return self.get_observation()
 
@@ -350,7 +332,7 @@ class GroceryEnvironment(gym.Env):
 
 		if(self.userMealNr >= self.USER_TOTAL_MEALS or self.userCurrentBudget <= 0): 
 			done = True
-			print(f'\t\tTOTAL NUTRIENTS COMPUTED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}')
+			print(f'\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}')
 			print(f"\t\tACTION HISTORY: [{self.selectedActions}]")
 			print(f"\t\tTotal money spent: [{(self.startedBudget) - self.userCurrentBudget}]")
 
@@ -364,7 +346,14 @@ class GroceryEnvironment(gym.Env):
 		return observation, reward, done, {}
 
 	def render(self):
-		pass
+		print("\n\n\t\t ************ RESULT ************ \n\n")
+		print(f"\t\tUser Info: Gender: {'Men' if self.gender is 1 else 'Women'} | Age: {self.age} years | Weight: {self.weight}kg | Height: {self.height / 100}m | Physical Activity: {self.physicalAct}\n\n")
+
+		for action in self.selectedActions:
+			print(f"\t\t\t {self.products[action]['prod_name']} | {self.products[action]['prod_brand']} | {self.products[action]['prod_price']} | {self.products[action]['prod_qty']}")
+		
+		print(f"\n\t\t {(self.startedBudget) - self.userCurrentBudget} spent from given {self.startedBudget} budget limit.")
+		print(f'\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}.')
 
 	def close(self):
 		pass
