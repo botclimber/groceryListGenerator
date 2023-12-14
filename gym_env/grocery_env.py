@@ -170,7 +170,7 @@ class GroceryEnvironment(gym.Env):
 		self.stabilizer()
 
 		self.userMealNr += 1
-		self.userCurrentBudget += cost
+		self.userCurrentBudget -= cost
 
 	def compute_userHappiness(self, name, brand):
 		happinessConstant = 100 / USER_TOTAL_MEALS
