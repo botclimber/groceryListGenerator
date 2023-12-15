@@ -131,14 +131,33 @@ class GroceryEnvironment(gym.Env):
 
 		return fromListToDict
 
+	def normalize(value, min_val, max_val):
+    	return (value - min_val) / (max_val - min_val) if max_val != min_val else 0.5
+
 	# TODO: give bad reward in case of selecting same action
 	def compute_reward(self, done):
 		# Combine rewards with weights if needed
+		print("\t\tREWARD:")
+
+		weights = {
+			"happiness" : 0.2,
+			"health": 0.35,
+			"budget_limit": 0.45 
+		}
 
 		if done and self.userMealNr < 14:
 			reward = -1
 		else:
-			reward = (self.userHealth + self.userHappiness + self.userCurrentBudget) / self.selectedActions.count(self.selectedActions[-1])
+			# Normalizing state variables
+			normalized_health = normalize(self.userHealth, min_health, max_health)
+			normalized_happiness = normalize(self.userHappiness, min_happiness, max_happiness)
+			normalized_budget = normalize(self.userCurrentBudget, min_budget, max_budget)
+
+			print(f"\t\t\tNORMALIZED HAPPINESS: {normalized_happiness}")
+			print(f"\t\t\tNORMALIZED HEALTH: {normalized_health}")
+			print(f"\t\t\tNORMALIZED LIMIT_BUDGET: {normalized_budget}")
+			
+			reward = ( (normalized_health * weights["health"]) + (normalized_happiness * weights["happiness"]) + (normalized_budget * weights["budget_limit"])) * len(set(self.selectedActions))
 
 		return round(reward, 2)
 
