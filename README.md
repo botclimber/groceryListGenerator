@@ -2,6 +2,14 @@
 
 AI meal planner
 
+1. Epsilon-Greedy Policy
+2. Softmax Exploration (Boltzmann Exploration)
+3. UCB (Upper Confidence Bound)
+4. Thompson Sampling
+5. Noisy Networks
+6. Bootstrapped DQN
+7. RND (Random Network Distillation)
+
 ---
 @DEPRECATED
 # AI Grocery list generator

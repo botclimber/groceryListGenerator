@@ -132,9 +132,13 @@ class GroceryEnvironment(gym.Env):
 		return fromListToDict
 
 	# TODO: give bad reward in case of selecting same action
-	def compute_reward(self):
+	def compute_reward(self, done):
 		# Combine rewards with weights if needed
-		reward = self.userHealth + self.userHappiness + self.userCurrentBudget
+
+		if done and self.userMealNr < 14:
+			reward = -1
+		else:
+			reward = (self.userHealth + self.userHappiness + self.userCurrentBudget) / self.selectedActions.count(self.selectedActions[-1])
 
 		return round(reward, 2)
 
@@ -342,7 +346,7 @@ class GroceryEnvironment(gym.Env):
 			print(f"\t\tTotal money spent: [{(self.startedBudget) - self.userCurrentBudget}]")
 
 		observation = self.get_observation()
-		reward = self.compute_reward()
+		reward = self.compute_reward(done)
 
 		print(f"\n\t\t REWARD: ({reward}) \n")
 		print(f"\n\t\t OBSERVATION: ({observation}) \n")
@@ -354,8 +358,8 @@ class GroceryEnvironment(gym.Env):
 		print("\n\n\t\t ************ RESULT ************ \n\n")
 		print(f"\t\tUser Info: Gender: {'Men' if self.gender is 1 else 'Women'} | Age: {self.age} years | Weight: {self.weight}kg | Height: {self.height / 100}m | Physical Activity: {self.physicalAct}\n\n")
 
-		for action in self.selectedActions:
-			print(f"\t\t\t {self.products[action]['prod_name']} | {self.products[action]['prod_brand']} | {self.products[action]['prod_price']} | {self.products[action]['prod_qty']}")
+		for index, action in enumerate(self.selectedActions):
+			print(f"\t\t\t {index+1}. {self.products[action]['prod_name']} | {self.products[action]['prod_brand']} | {self.products[action]['prod_price']} | {self.products[action]['prod_qty']}")
 		
 		print(f"\n\t\t {round((self.startedBudget) - self.userCurrentBudget, 2)} spent from given {self.startedBudget} budget limit.")
 		print(f'\t\tTOTAL NUTRIENTS CONSUMED -> Energy: {self.calories["total"]} | LIPIDS: {self.lipids["total"]} | CARBOS: {self.carbos["total"]} | FIBER: {self.fiber["total"]} | PROTEIN: {self.protein["total"]} | SALT: {self.salt["total"]}.')
