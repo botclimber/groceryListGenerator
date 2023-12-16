@@ -10,6 +10,9 @@ AI meal planner
 6. Bootstrapped DQN
 7. RND (Random Network Distillation)
 
+TODO:
+    - try TRPO with discrete actions
+
 ---
 @DEPRECATED
 # AI Grocery list generator

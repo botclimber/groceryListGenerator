@@ -39,12 +39,15 @@ class NRC:
         return self.calcBMR() * self.calcActivityFactor()
 
 class Nutrient:
+    # Considering the user will do only 2 meals per day
+    MEALS_IN_A_DAY = 2
+
     def __init__(self, qty, unit):
         self.qty = qty
         self.unit = unit
 
     def compare(self, param):
-        return round((param - self.qty), 3)
+        return round(( (param / self.MEALS_IN_A_DAY) - self.qty), 3)
 
 class EnergyPerDay(Nutrient):
     def __init__(self, qty, unit):
